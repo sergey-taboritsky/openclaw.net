@@ -108,6 +108,8 @@ The streaming contract is:
 
 - submitted -> working -> artifact chunks -> completed/failed
 - all text deltas append to `artifactId: "text-delta"`
+- successful streams mark the final emitted `text-delta` chunk with `lastChunk=true` before task completion
+- failed/canceled streams may terminate without a `lastChunk=true` artifact close event
 - if a failure happens after partial text has already been emitted, previously sent chunks are retained and the task terminates as `failed`
 - task completion is finalized with `CompleteAsync`; no extra artifact chunks are emitted after completion
 

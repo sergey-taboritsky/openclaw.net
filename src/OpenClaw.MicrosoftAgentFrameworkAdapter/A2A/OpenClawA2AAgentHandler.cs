@@ -110,6 +110,7 @@ public sealed class OpenClawA2AAgentHandler : IAgentHandler
         var responseText = new StringBuilder();
         string? errorMessage = null;
         var deltaCount = 0;
+        string? pendingDelta = null;
 
         await updater.SubmitAsync(cancellationToken);
         await updater.StartWorkAsync(
@@ -134,14 +135,19 @@ public sealed class OpenClawA2AAgentHandler : IAgentHandler
                         case AgentStreamEventType.TextDelta when !string.IsNullOrEmpty(evt.Content):
                             deltaCount++;
                             responseText.Append(evt.Content);
-                            await updater.AddArtifactAsync(
-                                [Part.FromText(evt.Content)],
-                                artifactId: "text-delta",
-                                name: "Streaming response",
-                                description: "Incremental text from agent",
-                                lastChunk: false,
-                                append: true,
-                                cancellationToken: ct);
+                            if (!string.IsNullOrEmpty(pendingDelta))
+                            {
+                                await updater.AddArtifactAsync(
+                                    [Part.FromText(pendingDelta)],
+                                    artifactId: "text-delta",
+                                    name: "Streaming response",
+                                    description: "Incremental text from agent",
+                                    lastChunk: false,
+                                    append: true,
+                                    cancellationToken: ct);
+                            }
+
+                            pendingDelta = evt.Content;
                             break;
                         case AgentStreamEventType.Error when !string.IsNullOrWhiteSpace(evt.Content):
                             errorMessage = evt.Content;
@@ -157,6 +163,18 @@ public sealed class OpenClawA2AAgentHandler : IAgentHandler
         catch (Exception ex)
         {
             _logger.LogError(ex, "A2A streaming execution failed for task {TaskId} after {DeltaCount} deltas", taskId, deltaCount);
+            if (!string.IsNullOrEmpty(pendingDelta))
+            {
+                await updater.AddArtifactAsync(
+                    [Part.FromText(pendingDelta)],
+                    artifactId: "text-delta",
+                    name: "Streaming response",
+                    description: "Incremental text from agent",
+                    lastChunk: false,
+                    append: true,
+                    cancellationToken: cancellationToken);
+            }
+
             await updater.FailAsync(
                 CreateAgentMessage("A2A request failed.", taskId, contextId),
                 cancellationToken);
@@ -170,6 +188,19 @@ public sealed class OpenClawA2AAgentHandler : IAgentHandler
                 taskId,
                 deltaCount,
                 errorMessage);
+
+            if (!string.IsNullOrEmpty(pendingDelta))
+            {
+                await updater.AddArtifactAsync(
+                    [Part.FromText(pendingDelta)],
+                    artifactId: "text-delta",
+                    name: "Streaming response",
+                    description: "Incremental text from agent",
+                    lastChunk: false,
+                    append: true,
+                    cancellationToken: cancellationToken);
+            }
+
             await updater.FailAsync(CreateAgentMessage(errorMessage, taskId, contextId), cancellationToken);
             return;
         }
@@ -183,7 +214,18 @@ public sealed class OpenClawA2AAgentHandler : IAgentHandler
                 artifactId: "text-delta",
                 name: "Streaming response",
                 description: "Incremental text from agent",
-                lastChunk: false,
+                lastChunk: true,
+                append: true,
+                cancellationToken: cancellationToken);
+        }
+        else if (!string.IsNullOrEmpty(pendingDelta))
+        {
+            await updater.AddArtifactAsync(
+                [Part.FromText(pendingDelta)],
+                artifactId: "text-delta",
+                name: "Streaming response",
+                description: "Incremental text from agent",
+                lastChunk: true,
                 append: true,
                 cancellationToken: cancellationToken);
         }

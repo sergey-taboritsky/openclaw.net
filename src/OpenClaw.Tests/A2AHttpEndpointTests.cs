@@ -247,8 +247,9 @@ public sealed class A2AHttpEndpointTests
             Assert.NotNull(evt.ArtifactUpdate);
             Assert.Equal("text-delta", evt.ArtifactUpdate!.Artifact!.ArtifactId);
             Assert.True(evt.ArtifactUpdate.Append);
-            Assert.False(evt.ArtifactUpdate.LastChunk);
         });
+        Assert.False(artifactEvents[0].ArtifactUpdate!.LastChunk);
+        Assert.True(artifactEvents[1].ArtifactUpdate!.LastChunk);
         Assert.Equal("bridge:", artifactEvents[0].ArtifactUpdate!.Artifact!.Parts![0].Text);
         Assert.Equal("hello stream", artifactEvents[1].ArtifactUpdate!.Artifact!.Parts![0].Text);
     }
@@ -292,6 +293,7 @@ public sealed class A2AHttpEndpointTests
         var artifactEvent = Assert.Single(events, static evt => evt.PayloadCase == StreamResponseCase.ArtifactUpdate);
         var completedEvent = Assert.Single(events, static evt => evt.PayloadCase == StreamResponseCase.StatusUpdate && evt.StatusUpdate!.Status!.State == TaskState.Completed);
 
+        Assert.True(artifactEvent.ArtifactUpdate!.LastChunk);
         Assert.Equal("[TestAgent] Request completed.", artifactEvent.ArtifactUpdate!.Artifact!.Parts![0].Text);
         Assert.Equal("[TestAgent] Request completed.", completedEvent.StatusUpdate!.Status!.Message!.Parts![0].Text);
     }
@@ -307,6 +309,7 @@ public sealed class A2AHttpEndpointTests
         var artifactEvent = Assert.Single(events, static evt => evt.PayloadCase == StreamResponseCase.ArtifactUpdate);
         var failedEvent = Assert.Single(events, static evt => evt.PayloadCase == StreamResponseCase.StatusUpdate && evt.StatusUpdate!.Status!.State == TaskState.Failed);
 
+        Assert.False(artifactEvent.ArtifactUpdate!.LastChunk);
         Assert.Equal("partial:", artifactEvent.ArtifactUpdate!.Artifact!.Parts![0].Text);
         Assert.Equal("runtime failure after partial text", failedEvent.StatusUpdate!.Status!.Message!.Parts![0].Text);
     }
