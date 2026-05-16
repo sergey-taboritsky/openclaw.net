@@ -228,8 +228,14 @@ public sealed partial class MainWindowViewModel
 
     private async Task ApplyA2UiUpdateComponentsAsync(WsServerEnvelope envelope, string surfaceId)
     {
+        var surface = FindCanvasSurface(surfaceId);
+        if (surface is null)
+        {
+            await SendCanvasAckAsync(envelope, success: false, error: $"Unknown A2UI surface '{surfaceId}'.");
+            return;
+        }
+
         var components = BuildV09Components(surfaceId, envelope.Components, out var diagnostics);
-        var surface = GetOrCreateSurface(surfaceId, envelope.CatalogId, envelope.SurfaceTitle);
         surface.Components.Clear();
         surface.Diagnostics.Clear();
         foreach (var item in components)
@@ -245,7 +251,13 @@ public sealed partial class MainWindowViewModel
 
     private async Task ApplyA2UiUpdateDataModelAsync(WsServerEnvelope envelope, string surfaceId)
     {
-        var surface = GetOrCreateSurface(surfaceId, envelope.CatalogId, envelope.SurfaceTitle);
+        var surface = FindCanvasSurface(surfaceId);
+        if (surface is null)
+        {
+            await SendCanvasAckAsync(envelope, success: false, error: $"Unknown A2UI surface '{surfaceId}'.");
+            return;
+        }
+
         surface.DataModelJson = envelope.DataModelJson;
         ActiveCanvasSurface = surface;
         IsCanvasVisible = true;
@@ -433,10 +445,10 @@ public sealed partial class MainWindowViewModel
     private string BuildA2UiSyncDataModelJson(string? surfaceId)
     {
         var surface = FindCanvasSurface(surfaceId);
-        if (IsJsonObject(surface?.DataModelJson))
-            return surface!.DataModelJson!;
-
-        var values = (surface?.Components ?? CanvasFrames)
+        IReadOnlyCollection<A2UiFrameItem> sourceFrames = string.IsNullOrWhiteSpace(surfaceId)
+            ? surface is not null ? surface.Components : CanvasFrames
+            : surface is not null ? surface.Components : Array.Empty<A2UiFrameItem>();
+        var values = sourceFrames
             .Select(static frame => new { frame.Id, Value = GetA2UiSyncValue(frame) })
             .Where(static item => item.Value is not null)
             .ToDictionary(static item => item.Id, static item => item.Value);
@@ -465,7 +477,9 @@ public sealed partial class MainWindowViewModel
     {
         var resolvedSurfaceId = ResolveSurfaceId(surfaceId);
         var surface = FindCanvasSurface(resolvedSurfaceId);
-        var sourceFrames = surface?.Components ?? CanvasFrames;
+        IReadOnlyCollection<A2UiFrameItem> sourceFrames = string.IsNullOrWhiteSpace(surfaceId)
+            ? surface is not null ? surface.Components : CanvasFrames
+            : surface is not null ? surface.Components : Array.Empty<A2UiFrameItem>();
         var totalFrames = sourceFrames.Count;
         var frames = sourceFrames.Take(MaxSnapshotFrames).Select(frame => new
         {

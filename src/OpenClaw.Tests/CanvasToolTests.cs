@@ -98,7 +98,7 @@ public sealed class CanvasToolTests
     [Fact]
     public async Task A2UiCreateSurface_MinimalSurfaceIdSendsV09Envelope()
     {
-        var (broker, ws) = CreateConnectedBroker(["a2ui.v0_9"], [A2UiCatalogRegistry.AGenUiCatalogId]);
+        var (broker, ws) = await CreateConnectedBrokerAsync(["a2ui.v0_9"], [A2UiCatalogRegistry.AGenUiCatalogId]);
         var tool = new A2UiCreateSurfaceTool(broker, new GatewayConfig());
 
         var executeTask = tool.ExecuteAsync(
@@ -123,9 +123,9 @@ public sealed class CanvasToolTests
     [Fact]
     public async Task A2UiCreateSurface_OmittedCatalogRejectsUnsupportedComponentBeforeSend()
     {
-        var (broker, ws) = CreateConnectedBroker(["a2ui.v0_9"], [A2UiCatalogRegistry.OpenClawV08CatalogId]);
+        var (broker, ws) = await CreateConnectedBrokerAsync(["a2ui.v0_9"], [A2UiCatalogRegistry.OpenClawV08CatalogId]);
         var tool = new A2UiCreateSurfaceTool(broker, new GatewayConfig());
-        var component = """{"type":"Icon","name":"home"}""";
+        var component = """{"type":"Icon","id":"home","name":"home"}""";
 
         var result = await tool.ExecuteAsync(
             JsonSerializer.Serialize(new { surfaceId = "surface-1", components = new[] { component } }),
@@ -139,7 +139,7 @@ public sealed class CanvasToolTests
     [Fact]
     public async Task A2UiCreateSurface_RejectsMalformedOptionalComponentString()
     {
-        var (broker, ws) = CreateConnectedBroker(["a2ui.v0_9"], [A2UiCatalogRegistry.AGenUiCatalogId]);
+        var (broker, ws) = await CreateConnectedBrokerAsync(["a2ui.v0_9"], [A2UiCatalogRegistry.AGenUiCatalogId]);
         var tool = new A2UiCreateSurfaceTool(broker, new GatewayConfig());
 
         var result = await tool.ExecuteAsync(
@@ -154,7 +154,7 @@ public sealed class CanvasToolTests
     [Fact]
     public async Task A2UiCreateSurface_RejectsNonStringComponentArray()
     {
-        var (broker, ws) = CreateConnectedBroker(["a2ui.v0_9"], [A2UiCatalogRegistry.AGenUiCatalogId]);
+        var (broker, ws) = await CreateConnectedBrokerAsync(["a2ui.v0_9"], [A2UiCatalogRegistry.AGenUiCatalogId]);
         var tool = new A2UiCreateSurfaceTool(broker, new GatewayConfig());
 
         var result = await tool.ExecuteAsync(
@@ -171,7 +171,7 @@ public sealed class CanvasToolTests
     [InlineData("[]", "must be a JSON object")]
     public async Task A2UiCreateSurface_RejectsInvalidOrNonObjectOptionalDataModelJson(string dataModelJson, string expectedError)
     {
-        var (broker, ws) = CreateConnectedBroker(["a2ui.v0_9"], [A2UiCatalogRegistry.AGenUiCatalogId]);
+        var (broker, ws) = await CreateConnectedBrokerAsync(["a2ui.v0_9"], [A2UiCatalogRegistry.AGenUiCatalogId]);
         var tool = new A2UiCreateSurfaceTool(broker, new GatewayConfig());
 
         var result = await tool.ExecuteAsync(
@@ -186,11 +186,11 @@ public sealed class CanvasToolTests
     [Fact]
     public async Task A2UiCreateSurface_SendsV09EnvelopeWithOptionalCatalogTitleMetadataComponentsAndDataModel()
     {
-        var (broker, ws) = CreateConnectedBroker(["a2ui.v0_9"], [A2UiCatalogRegistry.AGenUiCatalogId]);
+        var (broker, ws) = await CreateConnectedBrokerAsync(["a2ui.v0_9"], [A2UiCatalogRegistry.AGenUiCatalogId]);
         var tool = new A2UiCreateSurfaceTool(broker, new GatewayConfig());
         var metadata = """{"theme":"dark"}""";
         var dataModelJson = """{"count":1}""";
-        var component = """{"type":"Text","text":"Hello"}""";
+        var component = """{"type":"Text","id":"hello","text":"Hello"}""";
         var argumentsJson = JsonSerializer.Serialize(new
         {
             surfaceId = "surface-1",
@@ -237,7 +237,7 @@ public sealed class CanvasToolTests
     [Fact]
     public async Task A2UiCreateSurface_MissingV09CapabilityReturnsError()
     {
-        var (broker, _) = CreateConnectedBroker(["a2ui.v0_8"], [A2UiCatalogRegistry.AGenUiCatalogId]);
+        var (broker, _) = await CreateConnectedBrokerAsync(["a2ui.v0_8"], [A2UiCatalogRegistry.AGenUiCatalogId]);
         var tool = new A2UiCreateSurfaceTool(broker, new GatewayConfig());
 
         var result = await tool.ExecuteAsync(
@@ -257,10 +257,10 @@ public sealed class CanvasToolTests
     [Fact]
     public async Task A2UiV09UpdateDeleteAndSyncTools_MissingV09CapabilityReturnsError()
     {
-        var (broker, ws) = CreateConnectedBroker(["a2ui.v0_8"], [A2UiCatalogRegistry.AGenUiCatalogId]);
+        var (broker, ws) = await CreateConnectedBrokerAsync(["a2ui.v0_8"], [A2UiCatalogRegistry.AGenUiCatalogId]);
         var config = new GatewayConfig();
         var context = Context(senderId: "client");
-        var component = """{"type":"Text","text":"Hello"}""";
+        var component = """{"type":"Text","id":"hello","text":"Hello"}""";
 
         Assert.Contains("a2ui.v0_9", await new A2UiUpdateComponentsTool(broker, config).ExecuteAsync(JsonSerializer.Serialize(new { surfaceId = "surface-1", components = new[] { component } }), context, CancellationToken.None), StringComparison.OrdinalIgnoreCase);
         Assert.Contains("a2ui.v0_9", await new A2UiUpdateDataModelTool(broker, config).ExecuteAsync(JsonSerializer.Serialize(new { surfaceId = "surface-1", dataModelJson = "{}" }), context, CancellationToken.None), StringComparison.OrdinalIgnoreCase);
@@ -272,7 +272,7 @@ public sealed class CanvasToolTests
     [Fact]
     public async Task A2UiUpdateComponents_RejectsInvalidComponentJsonAndAcceptsValidStringArray()
     {
-        var (broker, ws) = CreateConnectedBroker(["a2ui.v0_9"], [A2UiCatalogRegistry.AGenUiCatalogId]);
+        var (broker, ws) = await CreateConnectedBrokerAsync(["a2ui.v0_9"], [A2UiCatalogRegistry.AGenUiCatalogId]);
         var tool = new A2UiUpdateComponentsTool(broker, new GatewayConfig());
 
         var invalidResult = await tool.ExecuteAsync(
@@ -283,7 +283,7 @@ public sealed class CanvasToolTests
         Assert.Contains("not valid JSON", invalidResult, StringComparison.OrdinalIgnoreCase);
         Assert.Empty(ws.Sent);
 
-        var component = """{"type":"Text","text":"Hello"}""";
+        var component = """{"type":"Text","id":"hello","text":"Hello"}""";
         var executeTask = tool.ExecuteAsync(
             JsonSerializer.Serialize(new { surfaceId = "surface-1", components = new[] { component } }),
             Context(senderId: "client"),
@@ -303,7 +303,7 @@ public sealed class CanvasToolTests
     [Fact]
     public async Task A2UiUpdateComponents_RejectsNonStringComponentArray()
     {
-        var (broker, ws) = CreateConnectedBroker(["a2ui.v0_9"], [A2UiCatalogRegistry.AGenUiCatalogId]);
+        var (broker, ws) = await CreateConnectedBrokerAsync(["a2ui.v0_9"], [A2UiCatalogRegistry.AGenUiCatalogId]);
         var tool = new A2UiUpdateComponentsTool(broker, new GatewayConfig());
 
         var result = await tool.ExecuteAsync(
@@ -320,7 +320,7 @@ public sealed class CanvasToolTests
     [InlineData("[]", "must be a JSON object")]
     public async Task A2UiUpdateDataModel_RejectsInvalidOrNonObjectJson(string dataModelJson, string expectedError)
     {
-        var (broker, _) = CreateConnectedBroker(["a2ui.v0_9"], [A2UiCatalogRegistry.AGenUiCatalogId]);
+        var (broker, _) = await CreateConnectedBrokerAsync(["a2ui.v0_9"], [A2UiCatalogRegistry.AGenUiCatalogId]);
         var tool = new A2UiUpdateDataModelTool(broker, new GatewayConfig());
 
         var result = await tool.ExecuteAsync(
@@ -334,7 +334,7 @@ public sealed class CanvasToolTests
     [Fact]
     public async Task A2UiUpdateDataModel_SendsV09Envelope()
     {
-        var (broker, ws) = CreateConnectedBroker(["a2ui.v0_9"], [A2UiCatalogRegistry.AGenUiCatalogId]);
+        var (broker, ws) = await CreateConnectedBrokerAsync(["a2ui.v0_9"], [A2UiCatalogRegistry.AGenUiCatalogId]);
         var tool = new A2UiUpdateDataModelTool(broker, new GatewayConfig());
         var dataModelJson = """{"count":2}""";
 
@@ -356,7 +356,7 @@ public sealed class CanvasToolTests
     [Fact]
     public async Task A2UiDeleteSurface_SendsV09Envelope()
     {
-        var (broker, ws) = CreateConnectedBroker(["a2ui.v0_9"], [A2UiCatalogRegistry.AGenUiCatalogId]);
+        var (broker, ws) = await CreateConnectedBrokerAsync(["a2ui.v0_9"], [A2UiCatalogRegistry.AGenUiCatalogId]);
         var tool = new A2UiDeleteSurfaceTool(broker, new GatewayConfig());
 
         var executeTask = tool.ExecuteAsync("""{"surfaceId":"surface-1"}""", Context(senderId: "client"), CancellationToken.None);
@@ -373,7 +373,7 @@ public sealed class CanvasToolTests
     [Fact]
     public async Task A2UiSyncUiToData_SendsV09EnvelopeWithOptionalFields()
     {
-        var (broker, ws) = CreateConnectedBroker(["a2ui.v0_9"], [A2UiCatalogRegistry.AGenUiCatalogId]);
+        var (broker, ws) = await CreateConnectedBrokerAsync(["a2ui.v0_9"], [A2UiCatalogRegistry.AGenUiCatalogId]);
         var tool = new A2UiSyncUiToDataTool(broker, new GatewayConfig());
 
         var executeTask = tool.ExecuteAsync(
@@ -409,7 +409,7 @@ public sealed class CanvasToolTests
     [Fact]
     public async Task A2UiV09Lifecycle_WebSocketRoundTrip_CoversCreateUpdateSnapshotSyncAndDelete()
     {
-        var (broker, ws) = CreateConnectedBroker(["a2ui.v0_9", "snapshot.state"], [A2UiCatalogRegistry.AGenUiCatalogId]);
+        var (broker, ws) = await CreateConnectedBrokerAsync(["a2ui.v0_9", "snapshot.state"], [A2UiCatalogRegistry.AGenUiCatalogId]);
         var config = new GatewayConfig();
         var context = Context(senderId: "client");
 
@@ -549,7 +549,7 @@ public sealed class CanvasToolTests
             SnapshotJson = snapshotJson
         }, CancellationToken.None);
 
-    private static (CanvasCommandBroker Broker, TestWebSocket WebSocket) CreateConnectedBroker(
+    private static async Task<(CanvasCommandBroker Broker, TestWebSocket WebSocket)> CreateConnectedBrokerAsync(
         string[] capabilities,
         string[] supportedCatalogIds,
         GatewayConfig? config = null)
@@ -563,12 +563,12 @@ public sealed class CanvasToolTests
             new RuntimeEventStore(
                 Path.Combine(Path.GetTempPath(), "openclaw-tests", Guid.NewGuid().ToString("N")),
                 NullLogger<RuntimeEventStore>.Instance));
-        broker.HandleClientEnvelopeAsync("client", new WsClientEnvelope
+        await broker.HandleClientEnvelopeAsync("client", new WsClientEnvelope
         {
             Type = "canvas_ready",
             Capabilities = capabilities,
             SupportedCatalogIds = supportedCatalogIds
-        }, CancellationToken.None).AsTask().GetAwaiter().GetResult();
+        }, CancellationToken.None);
         return (broker, ws);
     }
 

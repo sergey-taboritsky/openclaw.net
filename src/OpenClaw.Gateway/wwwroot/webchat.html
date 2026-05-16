@@ -1870,7 +1870,7 @@
             showCanvas();
             canvasHtmlFrame.hidden = true;
             a2uiSurfaces.hidden = false;
-            const surface = getCanvasSurface(env.surfaceId || 'main');
+            const surface = getCanvasSurface('main');
             surface.catalogId = surface.catalogId || 'urn:a2ui:catalog:openclaw_v0_8';
             surface.protocolVersion = 'v0_8';
             surface.deleted = false;
@@ -1972,7 +1972,7 @@
             checklist: 'CheckBox',
             table: 'Table',
             image: 'Image',
-            progress: 'Slider',
+            progress: 'Progress',
             chart: 'Chart'
         };
 
@@ -1983,6 +1983,7 @@
             Button: renderA2uiButton,
             TextField: renderA2uiInput,
             CheckBox: renderA2uiCheckBox,
+            Progress: renderA2uiProgress,
             Slider: renderA2uiProgress,
             ChoicePicker: renderA2uiSelect,
             DateTimeInput: renderA2uiDateTimeInput,
@@ -2185,6 +2186,8 @@
             const group = document.createElement('div');
             const disabled = Boolean(readDataModelPath(surface, frame.disabledBinding));
             const checkboxItems = [];
+            const current = boundValue(surface, frame, surface.values?.[frame.id]);
+            const currentValues = Array.isArray(current) ? current.map(value => String(value)) : null;
             const updateGroupState = () => {
                 const selected = checkboxItems.filter(item => item.checkbox.checked).map(item => item.value);
                 if (frame.id) surface.values[frame.id] = selected;
@@ -2196,7 +2199,7 @@
                 label.className = 'a2ui-muted';
                 const checkbox = document.createElement('input');
                 checkbox.type = 'checkbox';
-                checkbox.checked = Boolean(option.selected);
+                checkbox.checked = currentValues ? currentValues.includes(String(option.value)) : Boolean(option.selected);
                 checkbox.disabled = disabled;
                 checkboxItems.push({ checkbox, value: option.value });
                 checkbox.addEventListener('change', () => {
@@ -2208,7 +2211,11 @@
                 group.appendChild(label);
                 group.appendChild(document.createElement('br'));
             }
-            updateGroupState();
+            if (currentValues) {
+                if (frame.id) surface.values[frame.id] = currentValues;
+            } else {
+                updateGroupState();
+            }
             parent.appendChild(group);
         }
 

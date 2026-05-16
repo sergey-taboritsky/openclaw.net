@@ -50,31 +50,38 @@ public sealed class CompanionCanvasUiTests : IDisposable
             Height = 600,
             DataContext = viewModel
         };
-        window.Show();
-        Dispatcher.UIThread.RunJobs();
+        try
+        {
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
 
-        var tabControl = window.GetVisualDescendants().OfType<TabControl>().Single();
-        tabControl.SelectedIndex = 2;
-        Dispatcher.UIThread.RunJobs();
+            var tabControl = window.GetVisualDescendants().OfType<TabControl>().Single();
+            tabControl.SelectedIndex = 2;
+            Dispatcher.UIThread.RunJobs();
 
-        var selector = window.FindControl<ComboBox>("CanvasSurfaceSelector");
-        Assert.NotNull(selector);
-        Assert.True(selector!.IsVisible);
-        Assert.Equal(viewModel.CanvasSurfaces, selector.ItemsSource);
-        Assert.Equal(viewModel.ActiveCanvasSurface, selector.SelectedItem);
-        Assert.Contains(viewModel.CanvasSurfaces, surface => surface.Title == "Alpha");
-        Assert.Contains(viewModel.CanvasSurfaces, surface => surface.Title == "Beta");
+            var selector = window.FindControl<ComboBox>("CanvasSurfaceSelector");
+            Assert.NotNull(selector);
+            Assert.True(selector!.IsVisible);
+            Assert.Equal(viewModel.CanvasSurfaces, selector.ItemsSource);
+            Assert.Equal(viewModel.ActiveCanvasSurface, selector.SelectedItem);
+            Assert.Contains(viewModel.CanvasSurfaces, surface => surface.Title == "Alpha");
+            Assert.Contains(viewModel.CanvasSurfaces, surface => surface.Title == "Beta");
 
-        var componentHost = window.FindControl<ItemsControl>("CanvasComponentHost");
-        Assert.NotNull(componentHost);
-        Assert.Equal(viewModel.ActiveCanvasSurface!.Components, componentHost!.ItemsSource);
-        Assert.Contains(window.GetVisualDescendants().OfType<Button>(), button => string.Equals(button.Content?.ToString(), "Save beta", StringComparison.Ordinal));
+            var componentHost = window.FindControl<ItemsControl>("CanvasComponentHost");
+            Assert.NotNull(componentHost);
+            Assert.Equal(viewModel.ActiveCanvasSurface!.Components, componentHost!.ItemsSource);
+            Assert.Contains(window.GetVisualDescendants().OfType<Button>(), button => string.Equals(button.Content?.ToString(), "Save beta", StringComparison.Ordinal));
 
-        selector.SelectedItem = viewModel.CanvasSurfaces.Single(surface => surface.SurfaceId == "alpha");
-        Dispatcher.UIThread.RunJobs();
+            selector.SelectedItem = viewModel.CanvasSurfaces.Single(surface => surface.SurfaceId == "alpha");
+            Dispatcher.UIThread.RunJobs();
 
-        Assert.Equal("alpha", viewModel.ActiveCanvasSurface?.SurfaceId);
-        Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), text => string.Equals(text.Text, "Alpha ready", StringComparison.Ordinal));
+            Assert.Equal("alpha", viewModel.ActiveCanvasSurface?.SurfaceId);
+            Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), text => string.Equals(text.Text, "Alpha ready", StringComparison.Ordinal));
+        }
+        finally
+        {
+            window.Close();
+        }
     }
 
     private MainWindowViewModel CreateViewModel()

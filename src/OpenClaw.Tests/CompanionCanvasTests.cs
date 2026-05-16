@@ -286,7 +286,8 @@ public sealed class CompanionCanvasTests : IDisposable
     public async Task ApplyCanvasEnvelope_V09SyncUiToDataReturnsDataModelValueJson()
     {
         var (viewModel, ws) = CreateViewModel();
-        await ApplyCanvasEnvelopeAsync(viewModel, CreateSurfaceEnvelope("alpha", "Alpha", [TextComponent("alpha-text", "Alpha")], "{\"count\":2}"));
+        await ApplyCanvasEnvelopeAsync(viewModel, CreateSurfaceEnvelope("alpha", "Alpha", ["""{"type":"TextField","id":"count","value":"2"}"""], "{\"count\":1}"));
+        viewModel.ActiveCanvasSurface!.Components.Single().ValueText = "3";
 
         await ApplyCanvasEnvelopeAsync(viewModel, new WsServerEnvelope
         {
@@ -303,7 +304,7 @@ public sealed class CompanionCanvasTests : IDisposable
         Assert.Equal("sync-alpha", result.RequestId);
         Assert.Equal("alpha", result.SurfaceId);
         Assert.Equal("pull", result.SyncMode);
-        Assert.Equal("{\"count\":2}", result.ValueJson);
+        Assert.Equal("{\"count\":\"3\"}", result.ValueJson);
         Assert.Null(result.DataModelJson);
     }
 
@@ -408,6 +409,67 @@ public sealed class CompanionCanvasTests : IDisposable
         var ack = LastSentEnvelope(ws);
         Assert.Equal("bad-update", ack.RequestId);
         Assert.False(ack.Success);
+    }
+
+    [Fact]
+    public async Task ApplyCanvasEnvelope_V09UpdateForUnknownSurfaceDoesNotCreateSurface()
+    {
+        var (viewModel, ws) = CreateViewModel();
+
+        await ApplyCanvasEnvelopeAsync(viewModel, new WsServerEnvelope
+        {
+            Type = "a2ui_update_components",
+            Operation = "updateComponents",
+            RequestId = "update-missing",
+            SessionId = "sess",
+            SurfaceId = "missing",
+            CatalogId = A2UiCatalogRegistry.AGenUiCatalogId,
+            Components = [TextComponent("replacement", "Replacement")]
+        });
+
+        Assert.Empty(viewModel.CanvasSurfaces);
+        Assert.Null(viewModel.ActiveCanvasSurface);
+
+        var ack = LastSentEnvelope(ws);
+        Assert.Equal("update-missing", ack.RequestId);
+        Assert.False(ack.Success);
+        Assert.Contains("Unknown A2UI surface", ack.Error, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task ApplyCanvasEnvelope_V09SnapshotAndSyncForUnknownSurfaceDoNotUseActiveSurface()
+    {
+        var (viewModel, ws) = CreateViewModel();
+        await ApplyCanvasEnvelopeAsync(viewModel, CreateSurfaceEnvelope("alpha", "Alpha", [TextComponent("alpha-text", "Alpha")], "{\"alpha\":1}"));
+
+        await ApplyCanvasEnvelopeAsync(viewModel, new WsServerEnvelope
+        {
+            Type = "canvas_snapshot",
+            RequestId = "snap-missing",
+            SessionId = "sess",
+            SurfaceId = "missing"
+        });
+
+        var snapshot = LastSentEnvelope(ws);
+        using (var doc = JsonDocument.Parse(snapshot.SnapshotJson!))
+        {
+            Assert.Equal("missing", doc.RootElement.GetProperty("surfaceId").GetString());
+            Assert.Equal(0, doc.RootElement.GetProperty("frameCount").GetInt32());
+            Assert.Empty(doc.RootElement.GetProperty("frames").EnumerateArray());
+        }
+
+        await ApplyCanvasEnvelopeAsync(viewModel, new WsServerEnvelope
+        {
+            Type = "a2ui_sync_ui_to_data",
+            Operation = "syncUIToData",
+            RequestId = "sync-missing",
+            SessionId = "sess",
+            SurfaceId = "missing"
+        });
+
+        var sync = LastSentEnvelope(ws);
+        Assert.Equal("sync-missing", sync.RequestId);
+        Assert.Equal("{}", sync.ValueJson);
     }
 
     [Fact]
