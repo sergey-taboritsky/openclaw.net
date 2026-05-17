@@ -56,7 +56,7 @@ public sealed class CompanionCanvasUiTests : IDisposable
             Dispatcher.UIThread.RunJobs();
 
             var tabControl = window.GetVisualDescendants().OfType<TabControl>().Single();
-            tabControl.SelectedIndex = 2;
+            tabControl.SelectedIndex = 3;
             Dispatcher.UIThread.RunJobs();
 
             var selector = window.FindControl<ComboBox>("CanvasSurfaceSelector");
@@ -77,6 +77,44 @@ public sealed class CompanionCanvasUiTests : IDisposable
 
             Assert.Equal("alpha", viewModel.ActiveCanvasSurface?.SurfaceId);
             Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), text => string.Equals(text.Text, "Alpha ready", StringComparison.Ordinal));
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [AvaloniaFact]
+    public void MainWindow_RendersRuntimeConsoleShellAndNavigationSections()
+    {
+        var viewModel = CreateViewModel();
+        var window = new MainWindow
+        {
+            Width = 1100,
+            Height = 760,
+            DataContext = viewModel
+        };
+        try
+        {
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            var tabControl = window.GetVisualDescendants().OfType<TabControl>().Single();
+            Assert.Equal(Dock.Left, tabControl.TabStripPlacement);
+            Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), text => string.Equals(text.Text, "OpenClaw.NET Companion", StringComparison.Ordinal));
+
+            var headers = tabControl.Items.OfType<TabItem>().Select(static item => item.Header?.ToString()).ToArray();
+            Assert.Contains("Home", headers);
+            Assert.Contains("Sessions", headers);
+            Assert.Contains("Runtime Events", headers);
+            Assert.Contains("Plugins & Channels", headers);
+            Assert.Contains("Payment Lab", headers);
+
+            tabControl.SelectedIndex = 4;
+            Dispatcher.UIThread.RunJobs();
+
+            Assert.Equal(4, viewModel.SelectedSectionIndex);
+            Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), text => string.Equals(text.Text, "Sessions", StringComparison.Ordinal));
         }
         finally
         {

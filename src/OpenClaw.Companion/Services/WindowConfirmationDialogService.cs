@@ -1,0 +1,76 @@
+using Avalonia.Controls;
+using Avalonia.Layout;
+
+namespace OpenClaw.Companion.Services;
+
+public sealed class WindowConfirmationDialogService(Window owner) : IConfirmationDialogService
+{
+    public async Task<bool> ConfirmAsync(
+        string title,
+        string message,
+        string confirmText,
+        string cancelText,
+        CancellationToken cancellationToken)
+    {
+        if (cancellationToken.IsCancellationRequested)
+            return false;
+
+        var dialog = new Window
+        {
+            Title = title,
+            Width = 420,
+            SizeToContent = SizeToContent.Height,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            CanResize = false
+        };
+
+        var result = false;
+        var confirmButton = new Button
+        {
+            Content = confirmText,
+            MinWidth = 96,
+            HorizontalContentAlignment = HorizontalAlignment.Center
+        };
+        var cancelButton = new Button
+        {
+            Content = cancelText,
+            MinWidth = 96,
+            HorizontalContentAlignment = HorizontalAlignment.Center
+        };
+
+        confirmButton.Click += (_, _) =>
+        {
+            result = true;
+            dialog.Close();
+        };
+        cancelButton.Click += (_, _) =>
+        {
+            result = false;
+            dialog.Close();
+        };
+
+        dialog.Content = new StackPanel
+        {
+            Margin = new Avalonia.Thickness(20),
+            Spacing = 16,
+            Children =
+            {
+                new TextBlock
+                {
+                    Text = message,
+                    TextWrapping = Avalonia.Media.TextWrapping.Wrap
+                },
+                new StackPanel
+                {
+                    Orientation = Orientation.Horizontal,
+                    HorizontalAlignment = HorizontalAlignment.Right,
+                    Spacing = 8,
+                    Children = { cancelButton, confirmButton }
+                }
+            }
+        };
+
+        await dialog.ShowDialog(owner);
+        return result && !cancellationToken.IsCancellationRequested;
+    }
+}
