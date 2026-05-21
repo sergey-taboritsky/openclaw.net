@@ -59,9 +59,22 @@ public sealed class FileHarnessContractStore : IHarnessContractStore
         foreach (var file in files)
         {
             ct.ThrowIfCancellationRequested();
-            var contract = await LoadOneAsync(file, ct);
-            if (contract is not null && Matches(contract, query))
-                results.Add(contract);
+            try
+            {
+                var contract = await LoadOneAsync(file, ct);
+                if (contract is not null && Matches(contract, query))
+                    results.Add(contract);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (InvalidOperationException)
+            {
+            }
+            catch (NullReferenceException)
+            {
+            }
         }
 
         var limit = Math.Clamp(query.Limit, 1, 500);
@@ -118,7 +131,7 @@ public sealed class FileHarnessContractStore : IHarnessContractStore
             return false;
 
         if (!string.IsNullOrWhiteSpace(query.Tag) &&
-            !contract.Tags.Any(tag => string.Equals(tag, query.Tag, StringComparison.OrdinalIgnoreCase)))
+            (contract.Tags?.Any(tag => string.Equals(tag, query.Tag, StringComparison.OrdinalIgnoreCase)) != true))
             return false;
 
         if (query.CreatedFromUtc is { } fromUtc && contract.CreatedAtUtc < fromUtc)
@@ -161,13 +174,23 @@ public sealed class FileHarnessContractStore : IHarnessContractStore
     private static async ValueTask SaveOneAsync(FileInfo file, HarnessContract contract, CancellationToken ct)
     {
         file.Directory?.Create();
-        var tempFile = new FileInfo($"{file.FullName}.tmp");
-        await using (var stream = tempFile.Open(FileMode.Create, FileAccess.Write, FileShare.None))
+        var tempFile = new FileInfo($"{file.FullName}.{Guid.NewGuid():N}.tmp");
+        var tempPath = tempFile.FullName;
+        try
         {
-            await JsonSerializer.SerializeAsync(stream, contract, CoreJsonContext.Default.HarnessContract, ct);
-        }
+            await using (var stream = tempFile.Open(FileMode.CreateNew, FileAccess.Write, FileShare.None))
+            {
+                await JsonSerializer.SerializeAsync(stream, contract, CoreJsonContext.Default.HarnessContract, ct);
+            }
 
-        tempFile.MoveTo(file.FullName, overwrite: true);
+            tempFile.MoveTo(file.FullName, overwrite: true);
+        }
+        finally
+        {
+            var cleanupFile = new FileInfo(tempPath);
+            if (cleanupFile.Exists)
+                cleanupFile.Delete();
+        }
     }
 
     private static void EnsureSafeId(string id)

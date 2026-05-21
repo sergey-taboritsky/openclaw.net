@@ -65,24 +65,25 @@ internal sealed class HarnessContractService
         if (existing is null)
             return null;
 
+        var normalizedStatus = NormalizeStatus(status);
         var now = DateTimeOffset.UtcNow;
         var updated = Copy(
             existing,
             id: existing.Id,
-            status: status.Trim(),
+            status: normalizedStatus,
             riskLevel: existing.RiskLevel,
             createdAtUtc: existing.CreatedAtUtc == default ? now : existing.CreatedAtUtc,
             updatedAtUtc: now,
-            approvedAtUtc: string.Equals(status, HarnessContractStatus.Approved, StringComparison.OrdinalIgnoreCase)
+            approvedAtUtc: string.Equals(normalizedStatus, HarnessContractStatus.Approved, StringComparison.Ordinal)
                 ? now
                 : existing.ApprovedAtUtc,
-            completedAtUtc: IsTerminalStatus(status) ? now : existing.CompletedAtUtc);
+            completedAtUtc: IsTerminalStatus(normalizedStatus) ? now : existing.CompletedAtUtc);
 
         await _store.SaveAsync(updated, ct);
         AppendEvent(
             updated,
             action: "contract_status_changed",
-            severity: StatusSeverity(status),
+            severity: StatusSeverity(normalizedStatus),
             summary: $"Harness contract '{updated.Id}' changed to '{updated.Status}'.");
         return updated;
     }
@@ -90,33 +91,35 @@ internal sealed class HarnessContractService
     public string DeriveRiskLevel(HarnessContract contract)
     {
         if (!string.IsNullOrWhiteSpace(contract.RiskLevel))
-            return contract.RiskLevel.Trim().ToLowerInvariant();
+            return NormalizeRisk(contract.RiskLevel);
 
         var risk = HarnessContractRiskLevels.Low;
-        if (contract.WriteSet.Count > 0)
+        if ((contract.WriteSet ?? []).Count > 0)
             risk = MaxRisk(risk, HarnessContractRiskLevels.Medium);
 
-        foreach (var action in contract.PlannedActions)
+        foreach (var action in contract.PlannedActions ?? [])
         {
+            if (action is null)
+                continue;
+
             if (!string.IsNullOrWhiteSpace(action.RiskLevel))
             {
                 risk = MaxRisk(risk, action.RiskLevel);
                 continue;
             }
 
-            if (action.WriteSet.Count > 0 || action.RequiresApproval)
+            var actionWriteSet = action.WriteSet ?? [];
+            if (actionWriteSet.Count > 0 || action.RequiresApproval)
                 risk = MaxRisk(risk, HarnessContractRiskLevels.Medium);
 
             var tool = action.ToolName ?? "";
             var actionType = action.ActionType ?? "";
-            if (IsHighRiskToolOrAction(tool, actionType, action.WriteSet))
+            if (IsHighRiskToolOrAction(tool, actionType, actionWriteSet))
                 risk = MaxRisk(risk, HarnessContractRiskLevels.High);
         }
 
-        foreach (var tool in contract.ToolsRequired.Where(static tool => IsHighRiskToolOrAction(tool.ToolName, "", [])))
-        {
+        if ((contract.ToolsRequired ?? []).Any(static tool => tool is not null && IsHighRiskToolOrAction(tool.ToolName, "", [])))
             risk = MaxRisk(risk, HarnessContractRiskLevels.High);
-        }
 
         return risk;
     }
@@ -128,7 +131,7 @@ internal sealed class HarnessContractService
             : contract.Id.Trim();
 
         var createdAt = contract.CreatedAtUtc == default || isNew ? now : contract.CreatedAtUtc;
-        var status = string.IsNullOrWhiteSpace(contract.Status) ? HarnessContractStatus.Draft : contract.Status.Trim();
+        var status = string.IsNullOrWhiteSpace(contract.Status) ? HarnessContractStatus.Draft : NormalizeStatus(contract.Status);
         return Copy(
             contract,
             id,
@@ -166,18 +169,59 @@ internal sealed class HarnessContractService
             RiskLevel = riskLevel,
             ApprovalRequired = source.ApprovalRequired,
             ApprovalReason = source.ApprovalReason,
-            PlannedActions = source.PlannedActions,
-            ReadSet = source.ReadSet,
-            WriteSet = source.WriteSet,
-            ToolsRequired = source.ToolsRequired,
-            Assumptions = source.Assumptions,
-            Constraints = source.Constraints,
-            VerificationPlan = source.VerificationPlan,
-            RollbackPlan = source.RollbackPlan,
-            SuccessCriteria = source.SuccessCriteria,
-            Tags = source.Tags,
+            PlannedActions = NormalizeActions(source.PlannedActions),
+            ReadSet = CleanList(source.ReadSet),
+            WriteSet = CleanList(source.WriteSet),
+            ToolsRequired = CleanList(source.ToolsRequired),
+            Assumptions = CleanList(source.Assumptions),
+            Constraints = CleanList(source.Constraints),
+            VerificationPlan = CleanList(source.VerificationPlan),
+            RollbackPlan = CleanList(source.RollbackPlan),
+            SuccessCriteria = CleanStrings(source.SuccessCriteria),
+            Tags = CleanStrings(source.Tags),
             Metadata = source.Metadata
         };
+
+    private static IReadOnlyList<HarnessContractAction> NormalizeActions(IReadOnlyList<HarnessContractAction>? actions)
+    {
+        if (actions is null || actions.Count == 0)
+            return [];
+
+        var normalized = new List<HarnessContractAction>(actions.Count);
+        for (var i = 0; i < actions.Count; i++)
+        {
+            var action = actions[i];
+            if (action is null)
+                continue;
+
+            normalized.Add(new HarnessContractAction
+            {
+                Id = string.IsNullOrWhiteSpace(action.Id) ? $"action_{i + 1}" : action.Id.Trim(),
+                Title = action.Title,
+                Description = action.Description,
+                ToolName = action.ToolName,
+                ActionType = action.ActionType,
+                RiskLevel = string.IsNullOrWhiteSpace(action.RiskLevel) ? null : NormalizeRisk(action.RiskLevel),
+                RequiresApproval = action.RequiresApproval,
+                ReadSet = CleanList(action.ReadSet),
+                WriteSet = CleanList(action.WriteSet),
+                ExpectedOutcome = action.ExpectedOutcome,
+                Status = action.Status
+            });
+        }
+
+        return normalized;
+    }
+
+    private static IReadOnlyList<T> CleanList<T>(IReadOnlyList<T>? items)
+        where T : class
+        => items?.Where(static item => item is not null).ToArray() ?? [];
+
+    private static IReadOnlyList<string> CleanStrings(IReadOnlyList<string>? items)
+        => items?
+            .Where(static item => !string.IsNullOrWhiteSpace(item))
+            .Select(static item => item.Trim())
+            .ToArray() ?? [];
 
     private void AppendEvent(HarnessContract contract, string action, string severity, string summary)
     {
@@ -253,7 +297,23 @@ internal sealed class HarnessContractService
             HarnessContractRiskLevels.Critical => HarnessContractRiskLevels.Critical,
             HarnessContractRiskLevels.High => HarnessContractRiskLevels.High,
             HarnessContractRiskLevels.Medium => HarnessContractRiskLevels.Medium,
-            _ => HarnessContractRiskLevels.Low
+            HarnessContractRiskLevels.Low => HarnessContractRiskLevels.Low,
+            _ => throw new ArgumentException($"Unsupported harness contract risk level '{risk}'.", nameof(risk))
+        };
+
+    private static string NormalizeStatus(string status)
+        => status.Trim().ToLowerInvariant() switch
+        {
+            HarnessContractStatus.Draft => HarnessContractStatus.Draft,
+            HarnessContractStatus.Proposed => HarnessContractStatus.Proposed,
+            HarnessContractStatus.Approved => HarnessContractStatus.Approved,
+            HarnessContractStatus.Executing => HarnessContractStatus.Executing,
+            HarnessContractStatus.Verified => HarnessContractStatus.Verified,
+            HarnessContractStatus.Failed => HarnessContractStatus.Failed,
+            HarnessContractStatus.Rejected => HarnessContractStatus.Rejected,
+            HarnessContractStatus.RolledBack => HarnessContractStatus.RolledBack,
+            HarnessContractStatus.Cancelled => HarnessContractStatus.Cancelled,
+            _ => throw new ArgumentException($"Unsupported harness contract status '{status}'.", nameof(status))
         };
 
     private static bool IsTerminalStatus(string status)

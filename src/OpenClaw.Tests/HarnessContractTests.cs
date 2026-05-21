@@ -96,7 +96,7 @@ public sealed class HarnessContractTests
         var service = CreateService(root);
         var created = await service.CreateAsync(BuildContract("hctr_status", HarnessContractStatus.Proposed), CancellationToken.None);
 
-        var updated = await service.MarkStatusAsync(created.Id, HarnessContractStatus.Verified, CancellationToken.None);
+        var updated = await service.MarkStatusAsync(created.Id, $" {HarnessContractStatus.Verified} ", CancellationToken.None);
 
         Assert.NotNull(updated);
         Assert.Equal(HarnessContractStatus.Verified, updated!.Status);
@@ -106,6 +106,53 @@ public sealed class HarnessContractTests
             .Query(new RuntimeEventQuery { Component = "harness", Action = "contract_status_changed" });
         Assert.Single(events);
         Assert.Equal(created.Id, events[0].CorrelationId);
+    }
+
+    [Fact]
+    public async Task HarnessContractService_RejectsUnknownStatus()
+    {
+        var service = CreateService(CreateTempDir());
+        var created = await service.CreateAsync(BuildContract("hctr_invalid_status", HarnessContractStatus.Proposed), CancellationToken.None);
+
+        await Assert.ThrowsAsync<ArgumentException>(async () =>
+            await service.MarkStatusAsync(created.Id, "unknown_status", CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task HarnessContractService_NormalizesNullCollectionsFromJson()
+    {
+        var service = CreateService(CreateTempDir());
+        const string json = """
+            {
+              "id": "hctr_null_collections",
+              "status": "draft",
+              "goal": "Handle nullable JSON payloads",
+              "plannedActions": null,
+              "readSet": null,
+              "writeSet": null,
+              "toolsRequired": null,
+              "successCriteria": null,
+              "tags": null
+            }
+            """;
+        var contract = JsonSerializer.Deserialize(json, CoreJsonContext.Default.HarnessContract);
+
+        var created = await service.CreateAsync(contract!, CancellationToken.None);
+
+        Assert.Empty(created.PlannedActions);
+        Assert.Empty(created.WriteSet);
+        Assert.Empty(created.ToolsRequired);
+        Assert.Empty(created.Tags);
+        Assert.Equal(HarnessContractRiskLevels.Low, created.RiskLevel);
+    }
+
+    [Fact]
+    public async Task HarnessContractService_RejectsUnknownRiskLevel()
+    {
+        var service = CreateService(CreateTempDir());
+
+        await Assert.ThrowsAsync<ArgumentException>(async () =>
+            await service.CreateAsync(BuildContract("hctr_invalid_risk", HarnessContractStatus.Draft, "severe"), CancellationToken.None));
     }
 
     [Theory]
