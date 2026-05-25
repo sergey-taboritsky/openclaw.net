@@ -54,6 +54,8 @@ internal sealed class LearningFeedbackRecorder(ILearningProposalStore proposalSt
             AppliedAutomationId = proposal.AppliedAutomationId,
             ManagedSkillPath = proposal.ManagedSkillPath,
             ManagedSkillMetadata = proposal.ManagedSkillMetadata,
+            Metadata = proposal.Metadata,
+            HarnessEvolution = proposal.HarnessEvolution,
             SourceSessionIds = proposal.SourceSessionIds,
             SourceTurnIds = proposal.SourceTurnIds,
             ToolNames = proposal.ToolNames,

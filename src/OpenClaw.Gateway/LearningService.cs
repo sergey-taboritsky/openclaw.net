@@ -7,6 +7,7 @@ using OpenClaw.Agent;
 using OpenClaw.Core.Abstractions;
 using OpenClaw.Core.Models;
 using OpenClaw.Core.Pipeline;
+using OpenClaw.Gateway.Mcp;
 
 namespace OpenClaw.Gateway;
 
@@ -22,6 +23,8 @@ internal sealed class LearningService
     private readonly ISessionSearchStore _sessionSearchStore;
     private readonly ILogger<LearningService> _logger;
     private readonly LlmProviderRegistry? _providerRegistry;
+    private readonly GatewayRuntimeHolder? _runtimeHolder;
+    private readonly HashSet<string>? _configuredDeliveryChannelIds;
 
     public LearningService(
         LearningConfig config,
@@ -30,7 +33,9 @@ internal sealed class LearningService
         IAutomationStore automationStore,
         ISessionSearchStore sessionSearchStore,
         ILogger<LearningService> logger,
-        LlmProviderRegistry? providerRegistry = null)
+        LlmProviderRegistry? providerRegistry = null,
+        GatewayRuntimeHolder? runtimeHolder = null,
+        IEnumerable<string>? deliveryChannelIds = null)
     {
         _config = config;
         _proposalStore = proposalStore;
@@ -39,6 +44,12 @@ internal sealed class LearningService
         _sessionSearchStore = sessionSearchStore;
         _logger = logger;
         _providerRegistry = providerRegistry;
+        _runtimeHolder = runtimeHolder;
+        _configuredDeliveryChannelIds = deliveryChannelIds is null
+            ? null
+            : new HashSet<string>(
+                deliveryChannelIds.Where(static id => !string.IsNullOrWhiteSpace(id)).Select(static id => id.Trim()),
+                StringComparer.OrdinalIgnoreCase);
     }
 
     public ValueTask<IReadOnlyList<LearningProposal>> ListAsync(string? status, string? kind, CancellationToken ct)
@@ -682,7 +693,7 @@ internal sealed class LearningService
             candidate,
             intent,
             existingAutomations,
-            new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "cron" });
+            ResolveAvailableDeliveryChannelIds());
         var preview = new AutomationSuggestionPreviewBuilder().Build(lastUser.Content, candidate, intent, quality);
         var createsDraft = quality.Decision is AutomationSuggestionQualityDecisions.ReadyDraft or AutomationSuggestionQualityDecisions.NeedsReviewDraft;
         var automation = createsDraft ? BuildManagedAutomationDraft(candidate, proposalId) : null;
@@ -713,6 +724,26 @@ internal sealed class LearningService
         };
 
         await _proposalStore.SaveProposalAsync(automationProposal, ct);
+    }
+
+    private IReadOnlySet<string> ResolveAvailableDeliveryChannelIds()
+    {
+        if (_configuredDeliveryChannelIds is { Count: > 0 })
+            return _configuredDeliveryChannelIds;
+
+        if (_runtimeHolder is not null)
+        {
+            try
+            {
+                return new HashSet<string>(_runtimeHolder.Runtime.ChannelAdapters.Keys, StringComparer.OrdinalIgnoreCase);
+            }
+            catch (InvalidOperationException)
+            {
+                // Runtime holder may be unset in unit tests or early startup.
+            }
+        }
+
+        return new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "cron" };
     }
 
     private async Task EnsureSkillProposalAsync(Session session, string actorId, ChatTurn assistantTurn, CancellationToken ct)

@@ -214,6 +214,7 @@ public class VideoFrameExtractionServiceTests
 @echo off
 set last=
 for %%a in (%*) do set last=%%~a
+echo %last%| findstr /r "%%[0-9]*d" >nul || exit /b 0
 for %%d in ("%last%") do set outdir=%%~dpd
 <nul set /p dummy=first>"%outdir%frame-001.jpg"
 <nul set /p dummy=second>"%outdir%frame-002.jpg"

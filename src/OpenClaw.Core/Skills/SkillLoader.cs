@@ -48,7 +48,7 @@ public static class SkillLoader
         {
             var managedDir = string.IsNullOrWhiteSpace(config.Load.ManagedRoot)
                 ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".openclaw", "skills")
-                : config.Load.ManagedRoot;
+                : NormalizeManagedRootPath(config.Load.ManagedRoot);
             if (Directory.Exists(managedDir))
                 ScanDirectory(managedDir, SkillSource.Managed, allSkills, logger);
         }
@@ -106,6 +106,26 @@ public static class SkillLoader
             eligible.Count, allSkills.Count);
 
         return eligible;
+    }
+
+    private static string NormalizeManagedRootPath(string managedRoot)
+    {
+        var normalized = managedRoot.Trim();
+
+        if (normalized.StartsWith("~", StringComparison.Ordinal))
+        {
+            var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            if (!string.IsNullOrWhiteSpace(home))
+            {
+                var suffix = normalized[1..].TrimStart('/', '\\');
+                normalized = suffix.Length == 0 ? home : Path.Combine(home, suffix);
+            }
+        }
+
+        if (!Path.IsPathRooted(normalized))
+            normalized = Path.GetFullPath(normalized);
+
+        return normalized;
     }
 
     /// <summary>

@@ -2407,6 +2407,45 @@ public sealed class GatewayAdminEndpointTests
     }
 
     [Fact]
+    public async Task LearningService_AutomationSuggestion_WhenCronUnavailable_StaysLearningOnly()
+    {
+        var storagePath = Path.Join(Path.GetTempPath(), "openclaw-learning-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(storagePath);
+        try
+        {
+            var store = new FileFeatureStore(storagePath);
+            var searchStore = new StaticSessionSearchStore(
+            [
+                new SessionSearchHit { SessionId = "sess-search-no-cron-1", ChannelId = "web", SenderId = "operator", Role = "user", Snippet = "比较当前的会话内容，做一个整体的评估", Score = 0.9f },
+                new SessionSearchHit { SessionId = "sess-search-no-cron-2", ChannelId = "web", SenderId = "operator", Role = "user", Snippet = "比较当前的会话内容，做一个整体的评估", Score = 0.8f }
+            ]);
+            var service = new LearningService(
+                new LearningConfig { SkillProposalThreshold = 99, AutomationProposalThreshold = 2 },
+                store,
+                store,
+                store,
+                searchStore,
+                NullLogger<LearningService>.Instance,
+                providerRegistry: null,
+                runtimeHolder: null,
+                deliveryChannelIds: ["websocket", "email"]);
+
+            await service.ObserveSessionAsync(BuildUserSession("sess-auto-no-cron", "比较当前的会话内容，做一个整体的评估"), CancellationToken.None);
+
+            var proposals = await store.ListProposalsAsync(LearningProposalStatus.Pending, LearningProposalKind.AutomationSuggestion, CancellationToken.None);
+            var proposal = Assert.Single(proposals);
+            Assert.Null(proposal.AutomationDraft);
+            Assert.Equal(AutomationSuggestionQualityDecisions.LearningOnly, proposal.AutomationQuality!.Decision);
+            Assert.Contains(proposal.AutomationQuality.BlockingIssues, static issue => issue.Contains("Delivery channel does not exist", StringComparison.Ordinal));
+        }
+        finally
+        {
+            if (Directory.Exists(storagePath))
+                Directory.Delete(storagePath, recursive: true);
+        }
+    }
+
+    [Fact]
     public void AutomationSuggestionRefinerAndPreviewBuilder_ConversationReview_AddStableDraftAndExplanation()
     {
         var originalPrompt = "比较当前的会话内容，做一个整体的评估";
@@ -2610,6 +2649,57 @@ public sealed class GatewayAdminEndpointTests
             if (Directory.Exists(storagePath))
                 Directory.Delete(storagePath, recursive: true);
         }
+    }
+
+    [Fact]
+    public void LearningFeedbackRecorder_CopyWithFeedback_PreservesMetadataAndHarnessEvolution()
+    {
+        var createdAt = DateTimeOffset.UtcNow.AddDays(-2);
+        var proposal = new LearningProposal
+        {
+            Id = "lp_feedback_copy",
+            Kind = LearningProposalKind.HarnessChange,
+            Status = LearningProposalStatus.Pending,
+            Title = "Harness proposal",
+            Summary = "Preserve fields during feedback copy.",
+            Metadata = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["source"] = "unit-test"
+            },
+            HarnessEvolution = new HarnessEvolutionProposal
+            {
+                Component = HarnessEvolutionComponents.Tools,
+                FailureMode = "Tool output was noisy.",
+                ProposedChange = "Tighten tool result schema.",
+                RiskLevel = LearningProposalRiskLevels.Low,
+                Confidence = 0.6f,
+                ProposalFingerprint = "fp-feedback-copy",
+                ApplyMode = HarnessEvolutionApplyModes.ManualOnly,
+                IsAutoApplicable = false,
+                RequiresRegression = false
+            },
+            CreatedAtUtc = createdAt,
+            UpdatedAtUtc = createdAt
+        };
+        var feedbackEvents =
+            new LearningProposalFeedbackEvent
+            {
+                Action = LearningProposalFeedbackActions.AcceptedWithoutEdits,
+                ChangedFields = [],
+                BeforeQualityScore = null,
+                AfterQualityScore = null,
+                Summary = "Accepted.",
+                CreatedAtUtc = DateTimeOffset.UtcNow
+            };
+
+        var copied = LearningFeedbackRecorder.CopyWithFeedback(proposal, [feedbackEvents]);
+
+        Assert.Same(proposal.Metadata, copied.Metadata);
+        Assert.Same(proposal.HarnessEvolution, copied.HarnessEvolution);
+        Assert.Single(copied.FeedbackEvents);
+        Assert.Equal(feedbackEvents.Action, copied.FeedbackEvents[0].Action);
+        Assert.Equal(proposal.CreatedAtUtc, copied.CreatedAtUtc);
+        Assert.True(copied.UpdatedAtUtc >= proposal.UpdatedAtUtc);
     }
 
     [Fact]
