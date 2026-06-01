@@ -133,7 +133,7 @@ public static class LlmClientFactory
             "azure-openai" => CreateAzureOpenAiClient(config)
                 .GetChatClient(config.Model)
                 .AsIChatClient(),
-            "openai-compatible" or "aperture" or "groq" or "together" or "lmstudio" =>
+            "openai-compatible" or "aperture" or "groq" or "together" or "lmstudio" or "deepseek" =>
                 CreateOpenAiCompatibleClient(new LlmProviderConfig
                 {
                     Provider = config.Provider,
@@ -142,6 +142,7 @@ public static class LlmClientFactory
                     SendRequestMetadata = config.SendRequestMetadata,
                     Model = config.Model,
                     Endpoint = config.Endpoint
+                        ?? ResolveDefaultOpenAiCompatibleEndpoint(config.Provider)
                         ?? throw new InvalidOperationException(
                             $"Endpoint must be set for provider '{config.Provider}'. " +
                             "Set OpenClaw:Llm:Endpoint or MODEL_PROVIDER_ENDPOINT.")
@@ -158,7 +159,7 @@ public static class LlmClientFactory
                 .AsIChatClient(config.Model),
             _ => throw new InvalidOperationException(
                 $"Unsupported LLM provider: {config.Provider}. " +
-                "Supported: openai, anthropic, claude, anthropic-vertex, gemini, google, ollama, embedded, azure-openai, openai-compatible, aperture, groq, together, lmstudio, amazon-bedrock")
+                "Supported: openai, anthropic, claude, anthropic-vertex, gemini, google, ollama, embedded, azure-openai, openai-compatible, aperture, groq, together, lmstudio, deepseek, amazon-bedrock")
         };
     }
 
@@ -182,7 +183,7 @@ public static class LlmClientFactory
                 Model = config.Model
             }, embeddingModel!),
             "gemini" or "google" => CreateGeminiEmbeddingClient(config, embeddingModel!),
-            "openai-compatible" or "aperture" or "groq" or "together" or "lmstudio" =>
+            "openai-compatible" or "aperture" or "groq" or "together" or "lmstudio" or "deepseek" =>
                 CreateOpenAiEmbeddingClient(new LlmProviderConfig
                 {
                     Provider = config.Provider,
@@ -191,6 +192,7 @@ public static class LlmClientFactory
                     SendRequestMetadata = config.SendRequestMetadata,
                     Model = config.Model,
                     Endpoint = config.Endpoint
+                        ?? ResolveDefaultOpenAiCompatibleEndpoint(config.Provider)
                 }, embeddingModel!),
             "anthropic-vertex" or "amazon-bedrock" => null,
             _ => null
@@ -309,6 +311,17 @@ public static class LlmClientFactory
             BaseUrl = llm.Endpoint
         };
     }
+
+    /// <summary>
+    /// Returns a default API endpoint for known OpenAI-compatible providers,
+    /// so users don't need to set MODEL_PROVIDER_ENDPOINT for well-known services.
+    /// </summary>
+    private static string? ResolveDefaultOpenAiCompatibleEndpoint(string provider)
+        => provider.ToLowerInvariant() switch
+        {
+            "deepseek" => "https://api.deepseek.com/v1",
+            _ => null
+        };
 
     internal static LlmClientTransportOptions CreateTransportOptions(string? endpoint)
         => new(
