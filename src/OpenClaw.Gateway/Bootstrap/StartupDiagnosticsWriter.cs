@@ -106,7 +106,7 @@ internal static class StartupDiagnosticsWriter
             var fileName = $"startup-diagnostics-{timestamp}.json";
             var filePath = Path.Combine(dir, fileName);
 
-            File.WriteAllText(filePath, JsonSerializer.Serialize(report, StartupJsonContext.Default.StartupDiagnosticsReport));
+            File.WriteAllText(filePath, JsonSerializer.Serialize(report, typeof(StartupDiagnosticsReport), StartupJsonContext.Default));
 
             Console.Error.WriteLine();
             Console.Error.WriteLine($"Diagnostics written to: {filePath}");
