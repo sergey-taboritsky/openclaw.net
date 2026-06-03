@@ -12,9 +12,6 @@ internal static class StartupFailureReporter
         bool suggestQuickstart = false,
         TextWriter? error = null)
     {
-        // Always write a detailed machine-readable diagnostics file first.
-        StartupDiagnosticsWriter.Write(ex, startup, environmentName);
-
         var writer = error ?? Console.Error;
         writer.WriteLine(Render(ex, startup, environmentName, isDoctorMode, suggestQuickstart));
         writer.Flush();
@@ -195,18 +192,9 @@ internal static class StartupFailureReporter
         }
         else
         {
-            var isUnsupportedProvider = Contains(ex.Message, "Unsupported LLM provider") ||
-                                        Contains(ex.Message, "is not available");
             title = $"{providerLabel} could not be initialized.";
-            summary = isUnsupportedProvider
-                ? $"'{provider}' is not a built-in provider. DeepSeek, Zhipu, Moonshot and other OpenAI-compatible APIs can be used via the 'openai-compatible' provider with an explicit endpoint."
-                : "The configured LLM provider was not available during startup.";
+            summary = "The configured LLM provider was not available during startup.";
             actions.Add("Confirm OpenClaw:Llm:Provider points to a built-in provider or to a plugin-backed provider that is enabled.");
-            if (isUnsupportedProvider)
-            {
-                actions.Add("For OpenAI-compatible APIs (DeepSeek / Groq / Together / etc.), set OpenClaw:Llm:Provider to 'openai-compatible' (or the specific provider alias if supported) and ensure OpenClaw:Llm:Endpoint is configured.");
-                actions.Add("Supported built-in providers: openai, anthropic, claude, gemini, google, ollama, embedded, azure-openai, openai-compatible, aperture, groq, together, lmstudio, deepseek, amazon-bedrock.");
-            }
             actions.Add("If this provider should come from a plugin, enable that plugin before launch.");
         }
 
