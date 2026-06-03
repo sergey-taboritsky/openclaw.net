@@ -2,77 +2,10 @@ using System.Diagnostics;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using OpenClaw.Core.Models;
 
 namespace OpenClaw.Gateway.Bootstrap;
-
-// -- Model types --------------------------------------------------------
-
-internal sealed record StartupDiagnosticsReport
-{
-    public DateTimeOffset GeneratedAt { get; init; }
-    public string? GatewayVersion { get; init; }
-    public required ExceptionDetail Exception { get; init; }
-    public required ConfigurationSummary Configuration { get; init; }
-    public required EnvironmentSummary Environment { get; init; }
-    public required FailureDiagnosis CategorizedDiagnosis { get; init; }
-}
-
-internal sealed record ExceptionDetail
-{
-    public required string Type { get; init; }
-    public required string Message { get; init; }
-    public string? StackTrace { get; init; }
-    public int HResult { get; init; }
-    public List<InnerExceptionDetail>? InnerException { get; init; }
-}
-
-internal sealed record InnerExceptionDetail
-{
-    public required string Type { get; init; }
-    public required string Message { get; init; }
-    public string? StackTrace { get; init; }
-    public int Depth { get; init; }
-}
-
-internal sealed record ConfigurationSummary
-{
-    public string? Environment { get; init; }
-    public string? BindAddress { get; init; }
-    public int? Port { get; init; }
-    public string? Provider { get; init; }
-    public string? Model { get; init; }
-    public string? Endpoint { get; init; }
-    public bool ApiKeyConfigured { get; init; }
-    public bool AuthTokenConfigured { get; init; }
-    public string? MemoryProvider { get; init; }
-    public string? MemoryStoragePath { get; init; }
-    public string? WorkspacePath { get; init; }
-    public bool? IsNonLoopbackBind { get; init; }
-    public string? RuntimeMode { get; init; }
-    public bool? DynamicCodeSupported { get; init; }
-}
-
-internal sealed record EnvironmentSummary
-{
-    public required string OSDescription { get; init; }
-    public required string OSArchitecture { get; init; }
-    public required string RuntimeVersion { get; init; }
-    public required string ProcessArchitecture { get; init; }
-    public int ProcessorCount { get; init; }
-    public required string CurrentDirectory { get; init; }
-    public double WorkingSetMB { get; init; }
-    public Dictionary<string, string?>? EnvironmentVariables { get; init; }
-    public string? CommandLine { get; init; }
-}
-
-internal sealed record FailureDiagnosis
-{
-    public required string Category { get; init; }
-    public required string Summary { get; init; }
-    public string? RootCause { get; init; }
-    public List<string>? SuggestedFixes { get; init; }
-}
 
 /// <summary>
 /// Writes a detailed, machine-readable JSON diagnostic report when the gateway
@@ -81,6 +14,12 @@ internal sealed record FailureDiagnosis
 /// </summary>
 internal static class StartupDiagnosticsWriter
 {
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        WriteIndented = true,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+    };
 
     /// <summary>
     /// Writes <c>startup-diagnostics-{timestamp}.json</c> to
@@ -106,7 +45,7 @@ internal static class StartupDiagnosticsWriter
             var fileName = $"startup-diagnostics-{timestamp}.json";
             var filePath = Path.Combine(dir, fileName);
 
-            File.WriteAllText(filePath, JsonSerializer.Serialize(report, StartupJsonContext.Default.StartupDiagnosticsReport));
+            File.WriteAllText(filePath, JsonSerializer.Serialize(report, JsonOptions));
 
             Console.Error.WriteLine();
             Console.Error.WriteLine($"Diagnostics written to: {filePath}");
@@ -119,7 +58,7 @@ internal static class StartupDiagnosticsWriter
         }
     }
 
-    internal static StartupDiagnosticsReport BuildReport(
+    private static StartupDiagnosticsReport BuildReport(
         Exception ex,
         GatewayStartupContext? startup,
         string environmentName)
@@ -405,5 +344,73 @@ internal static class StartupDiagnosticsWriter
             current = current.InnerException;
         }
         return chain;
+    }
+
+    // -- Model types --------------------------------------------------------
+
+    private sealed record StartupDiagnosticsReport
+    {
+        public DateTimeOffset GeneratedAt { get; init; }
+        public string? GatewayVersion { get; init; }
+        public required ExceptionDetail Exception { get; init; }
+        public required ConfigurationSummary Configuration { get; init; }
+        public required EnvironmentSummary Environment { get; init; }
+        public required FailureDiagnosis CategorizedDiagnosis { get; init; }
+    }
+
+    private sealed record ExceptionDetail
+    {
+        public required string Type { get; init; }
+        public required string Message { get; init; }
+        public string? StackTrace { get; init; }
+        public int HResult { get; init; }
+        public List<InnerExceptionDetail>? InnerException { get; init; }
+    }
+
+    private sealed record InnerExceptionDetail
+    {
+        public required string Type { get; init; }
+        public required string Message { get; init; }
+        public string? StackTrace { get; init; }
+        public int Depth { get; init; }
+    }
+
+    private sealed record ConfigurationSummary
+    {
+        public string? Environment { get; init; }
+        public string? BindAddress { get; init; }
+        public int? Port { get; init; }
+        public string? Provider { get; init; }
+        public string? Model { get; init; }
+        public string? Endpoint { get; init; }
+        public bool ApiKeyConfigured { get; init; }
+        public bool AuthTokenConfigured { get; init; }
+        public string? MemoryProvider { get; init; }
+        public string? MemoryStoragePath { get; init; }
+        public string? WorkspacePath { get; init; }
+        public bool? IsNonLoopbackBind { get; init; }
+        public string? RuntimeMode { get; init; }
+        public bool? DynamicCodeSupported { get; init; }
+    }
+
+    private sealed record EnvironmentSummary
+    {
+        public required string OSDescription { get; init; }
+        public required string OSArchitecture { get; init; }
+        public required string RuntimeVersion { get; init; }
+        public required string ProcessArchitecture { get; init; }
+        public int ProcessorCount { get; init; }
+        public required string CurrentDirectory { get; init; }
+        public double WorkingSetMB { get; init; }
+        public Dictionary<string, string?>? EnvironmentVariables { get; init; }
+        public string? CommandLine { get; init; }
+    }
+
+    private sealed record FailureDiagnosis
+    {
+        public required string Category { get; init; }
+        public required string Summary { get; init; }
+        public string? RootCause { get; init; }
+        public List<string>? SuggestedFixes { get; init; }
     }
 }
